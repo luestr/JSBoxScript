@@ -837,11 +837,11 @@ function showTranslationResult() {
                 make.height.equalTo(0.5);
               }
             },
-            // 更新日期行
+            // 更新时间行
             {
               type: "label",
               props: {
-                text: "更新日期",
+                text: "更新时间",
                 font: $font(15),
                 textColor: labelColor,
                 id: "date-label"
