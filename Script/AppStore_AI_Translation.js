@@ -158,10 +158,16 @@ function checkConfigAndTranslate() {
   
   const regexNew = /.com\/([a-z][A-z])\/app/;
   const matchNew = regexNew.exec(link);
-  const region = matchNew[1];
+  const region = matchNew ? matchNew[1] : null;
   
   if (appid) {
-    lookupApp(appid, region);
+    if (region) {
+      // 有国家编码，直接查询
+      lookupApp(appid, region);
+    } else {
+      // 没有国家编码，使用回退策略：cn -> us
+      lookupAppWithFallback(appid);
+    }
   }
 }
 
@@ -478,28 +484,70 @@ function testAPIConnection() {
   });
 }
 
+// 处理应用数据的公共函数
+function processAppData(result) {
+  releaseNotesOriginal = result.releaseNotes || "暂无发布说明";
+  appDescriptionOriginal = result.description || "暂无应用描述";
+  title = result.trackName;
+  appId = result.trackId;
+  appVersion = result.version;
+  updateDate = result.currentVersionReleaseDate.replace(/[a-z,A-Z]/g, " ").trim();
+  bundleId = result.bundleId;
+  startTranslation();
+}
+
 // 查询App信息
 function lookupApp(appid, region) {
+  queryAppInRegion(appid, region,
+    function(result) {
+      $ui.loading(false);
+      processAppData(result);
+    },
+    function() {
+      $ui.loading(false);
+      showError("获取应用详情失败", "请检查网络，并重新尝试运行脚本");
+    }
+  );
+}
+
+// 通用的应用查询函数
+function queryAppInRegion(appid, region, onSuccess, onFailure) {
   $http.get({
     url: `https://itunes.apple.com/${region}/lookup?id=${appid}`,
     handler: function(resp) {
-      $ui.loading(false);
       if (resp.data?.results?.length > 0) {
-        const result = resp.data.results[0];
-        releaseNotesOriginal = result.releaseNotes || "暂无发布说明";
-        appDescriptionOriginal = result.description || "暂无应用描述";
-        title = result.trackName;
-        appId = result.trackId;
-        appVersion = result.version;
-        updateDate = result.currentVersionReleaseDate.replace(/[a-z,A-Z]/g, " ").trim();
-        bundleId = result.bundleId;
-        
-        startTranslation();
+        onSuccess(resp.data.results[0]);
       } else {
-        showError("获取应用详情失败", "请检查网络，并重新尝试运行脚本");
+        onFailure();
       }
     }
   });
+}
+
+// 带回退策略的App查询：先尝试cn，失败后尝试us
+function lookupAppWithFallback(appid) {
+  queryAppInRegion(appid, 'cn', 
+    function(result) {
+      // 中国区找到了应用
+      $ui.loading(false);
+      processAppData(result);
+    },
+    function() {
+      // 中国区没有找到，尝试美国区
+      queryAppInRegion(appid, 'us',
+        function(result) {
+          // 美国区找到了应用
+          $ui.loading(false);
+          processAppData(result);
+        },
+        function() {
+          // 两个区域都没有找到应用
+          $ui.loading(false);
+          showError("应用未找到", "在中国区和美国区都没有找到此应用，请检查应用ID是否正确");
+        }
+      );
+    }
+  );
 }
 
 
