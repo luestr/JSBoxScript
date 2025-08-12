@@ -27,19 +27,114 @@ const MESSAGES = {
 // 全局变量
 let releaseNotesOriginal = "", appDescriptionOriginal = "";
 let releaseNotesTranslated = "", appDescriptionTranslated = "";
-let introduction = "";
 let title = "";
+let appId = "", appVersion = "", updateDate = "", bundleId = "";
 let currentDisplayContent = 1; // 1: 翻译内容, 2: 原文内容
 const link = $context.link;
 
 // 样式配置（合并重复定义，支持Dark Mode）
-const titleFont = $font("bold", 20);
-const contentFont = $font(16);
-const titleColor = $color("#ef475d"); // 保持红色主题色不变
-const contentColor = $color({
+const titleColor = $color({
   light: "#000000", // 浅色模式下使用黑色
   dark: "#FFFFFF"   // 深色模式下使用白色
 });
+
+const labelColor = $color({
+  light: "#8E8E93",
+  dark: "#8E8E93"
+});
+
+const valueColor = $color({
+  light: "#000000",
+  dark: "#FFFFFF"
+});
+
+const separatorColor = $color({
+  light: "#E5E5EA",
+  dark: "#38383A"
+});
+
+const cardColor = $color({
+  light: "#FFFFFF",
+  dark: "#1C1C1E"
+});
+
+const contentColor = $color({
+  light: "#3C3C43",
+  dark: "#EBEBF5"
+});
+
+// 通用卡片样式
+const cardStyle = {
+  bgcolor: cardColor,
+  cornerRadius: 12,
+  smoothCorners: true,
+  shadowColor: $color({
+    light: "#000000",
+    dark: "#000000"
+  }),
+  shadowOpacity: 0.1,
+  shadowOffset: $size(0, 2),
+  shadowRadius: 8
+};
+
+// 通用alert配置
+const defaultAlertAction = {
+  title: "我知道了",
+  handler: function() {}
+};
+
+// 通用文本组件样式
+const textContentStyle = {
+  font: $font(15),
+  editable: false,
+  selectable: false,
+  scrollEnabled: false,
+  bgcolor: $color("clear"),
+  lines: 0,
+  textContainerInset: $insets(0, 0, 0, 0),
+  userInteractionEnabled: true
+};
+
+// 通用按钮样式
+const buttonStyle = {
+  font: $font(16)
+};
+
+// 通用标题字体
+const titleFont = $font("bold", 18);
+
+// 通用宽度限制
+const maxCardWidth = $device.info.screen.width - 32;
+const maxContentWidth = $device.info.screen.width - 64;
+
+// 创建按钮布局函数
+function createButtonLayout(topInset) {
+  return function(make, view) {
+    make.left.right.inset(20);
+    make.top.inset(topInset);
+    make.height.equalTo(44);
+  };
+}
+
+// 创建内容布局函数
+function createContentLayout() {
+  return function(make, view) {
+    make.top.left.right.inset(16);
+    make.bottom.inset(16);
+    make.width.lessThanOrEqualTo(maxContentWidth);
+  };
+}
+
+// 通用长按复制事件处理函数
+function createLongPressHandler(getValue) {
+  return function(sender) {
+    const value = typeof getValue === 'function' ? getValue() : getValue;
+    $clipboard.text = value;
+    $ui.toast("已复制");
+  };
+}
+
+
 
 // 主入口
 if (($app.env == $env.action) && link) {
@@ -187,15 +282,10 @@ function showConfigPage() {
       views: [
         {
           type: "button",
-          props: {
-            title: "测试API",
-            font: $font(16)
-          },
-          layout: function(make, view) {
-            make.left.right.inset(20);
-            make.top.inset(30);
-            make.height.equalTo(44);
-          },
+          props: Object.assign({
+            title: "测试API"
+          }, buttonStyle),
+          layout: createButtonLayout(30),
           events: {
             tapped: function(sender) {
               testAPIConnection();
@@ -204,15 +294,10 @@ function showConfigPage() {
         },
         {
           type: "button",
-          props: {
-            title: "保存配置",
-            font: $font(16)
-          },
-          layout: function(make, view) {
-            make.left.right.inset(20);
-            make.top.inset(90);
-            make.height.equalTo(44);
-          },
+          props: Object.assign({
+            title: "保存配置"
+          }, buttonStyle),
+          layout: createButtonLayout(90),
           events: {
             tapped: function(sender) {
               saveConfig();
@@ -221,16 +306,11 @@ function showConfigPage() {
         },
         {
           type: "button",
-          props: {
+          props: Object.assign({
             title: "清除缓存",
-            font: $font(16),
             bgcolor: $color("#FF6B6B")
-          },
-          layout: function(make, view) {
-            make.left.right.inset(20);
-            make.top.inset(150);
-            make.height.equalTo(44);
-          },
+          }, buttonStyle),
+          layout: createButtonLayout(150),
           events: {
             tapped: function(sender) {
               clearTranslationCache();
@@ -255,6 +335,8 @@ function showConfigPage() {
       ]
     }]
   });
+  
+
 }
 
 // 获取配置
@@ -303,7 +385,8 @@ function saveConfig() {
   
   $ui.alert({
     title: "成功",
-    message: MESSAGES.CONFIG_SAVED
+    message: MESSAGES.CONFIG_SAVED,
+    actions: [defaultAlertAction]
   });
 }
 
@@ -339,10 +422,7 @@ function clearTranslationCache() {
                   $ui.alert({
                     title: "清除完成",
                     message: MESSAGES.CACHE_CLEARED,
-                    actions: [{
-                      title: "我知道了",
-                      handler: function() {}
-                    }]
+                    actions: [defaultAlertAction]
                   });
                 }
               });
@@ -351,6 +431,15 @@ function clearTranslationCache() {
         }
       }
     ]
+  });
+}
+
+// 显示测试结果
+function showTestResult(title, message) {
+  $ui.alert({
+    title: title,
+    message: message,
+    actions: [defaultAlertAction]
   });
 }
 
@@ -396,54 +485,18 @@ function testAPIConnection() {
       if (resp.response.statusCode === 200) {
         // 验证响应格式是否正确
         try {
-          if (resp.data && resp.data.output && resp.data.output.choices && resp.data.output.choices.length > 0) {
-            $ui.alert({
-              title: "测试成功",
-              message: "API连接正常，响应格式正确，可以正常使用翻译功能",
-              actions: [{
-                title: "我知道了",
-                handler: function() {}
-              }]
-            });
-          } else if (resp.data && resp.data.output && resp.data.output.text) {
-            $ui.alert({
-              title: "测试成功",
-              message: "API连接正常，响应格式正确，可以正常使用翻译功能",
-              actions: [{
-                title: "我知道了",
-                handler: function() {}
-              }]
-            });
+          if ((resp.data && resp.data.output && resp.data.output.choices && resp.data.output.choices.length > 0) ||
+              (resp.data && resp.data.output && resp.data.output.text)) {
+            showTestResult("测试成功", "API连接正常，响应格式正确，可以正常使用翻译功能");
           } else {
-            $ui.alert({
-              title: "测试警告",
-              message: `API连接成功但响应格式异常。\n响应数据: ${JSON.stringify(resp.data)}`,
-              actions: [{
-                title: "我知道了",
-                handler: function() {}
-              }]
-            });
+            showTestResult("测试警告", `API连接成功但响应格式异常。\n响应数据: ${JSON.stringify(resp.data)}`);
           }
         } catch (e) {
-          $ui.alert({
-            title: "测试警告",
-            message: `API连接成功但解析响应失败: ${e.message}`,
-            actions: [{
-              title: "我知道了",
-              handler: function() {}
-            }]
-          });
+          showTestResult("测试警告", `API连接成功但解析响应失败: ${e.message}`);
         }
       } else {
         const errorMsg = resp.data && resp.data.message ? resp.data.message : `HTTP错误: ${resp.response.statusCode}`;
-        $ui.alert({
-          title: "测试失败",
-          message: `API连接失败：${errorMsg}`,
-          actions: [{
-            title: "我知道了",
-            handler: function() {}
-          }]
-        });
+        showTestResult("测试失败", `API连接失败：${errorMsg}`);
       }
     }
   });
@@ -462,7 +515,10 @@ function lookupApp(appid, region) {
         releaseNotesOriginal = result.releaseNotes || "暂无发布说明";
         appDescriptionOriginal = result.description || "暂无应用描述";
         title = result.trackName;
-        introduction = `应用编号：${result.trackId}\n当前版本：${result.version}\n更新日期：${result.currentVersionReleaseDate.replace(/[a-z,A-Z]/g, " ")}\n包标识符：${result.bundleId}`;
+        appId = result.trackId;
+        appVersion = result.version;
+        updateDate = result.currentVersionReleaseDate.replace(/[a-z,A-Z]/g, " ").trim();
+        bundleId = result.bundleId;
         
         startTranslation();
       } else {
@@ -471,6 +527,8 @@ function lookupApp(appid, region) {
     }
   });
 }
+
+
 
 // 开始翻译流程
 function startTranslation() {
@@ -664,10 +722,7 @@ function showError(title, message, details = null) {
   $ui.alert({
     title: title,
     message: fullMessage,
-    actions: [{
-      title: "我知道了",
-      handler: function() {}
-    }]
+    actions: [defaultAlertAction]
   });
 }
 
@@ -700,6 +755,17 @@ function showTranslationResult() {
     views: [{
       type: "scroll",
       layout: $layout.fill,
+      props: {
+        bgcolor: $color({
+          light: "#F2F2F7",
+          dark: "#000000"
+        }),
+        contentWidth: $device.info.screen.width,
+        alwaysBounceVertical: true,
+        showsHorizontalScrollIndicator: false,
+        showsVerticalScrollIndicator: true,
+        bounces: true
+      },
       events: {
         didScroll: function(sender) {
           const pointOffsetY = sender.contentOffset.y * -1;
@@ -715,103 +781,315 @@ function showTranslationResult() {
         }
       },
       views: [
+        // 关键信息标题
         {
           type: "label",
           props: {
-            text: "当前版本：",
+            text: "关键信息",
             lines: 0,
             font: titleFont,
             textColor: titleColor,
             id: "update-version-title"
           },
           layout: function(make, view) {
-            make.top.left.inset(10);
-            make.width.equalTo(view.super).offset(-20);
+            make.top.inset(16);
+            make.left.right.inset(16);
           }
         },
+        // 关键信息卡片
         {
-          type: "text",
-          props: {
-            text: introduction,
-            font: contentFont,
-            textColor: contentColor,
-            id: "update-version",
-            editable: false,
-            selectable: true,
-            scrollEnabled: false
-          },
+          type: "view",
+          props: Object.assign({
+            id: "info-card"
+          }, cardStyle),
           layout: function(make, view) {
-            make.top.equalTo($("update-version-title").bottom).offset(5);
-            make.left.inset(10);
-            make.width.equalTo(view.super).offset(-20);
-          }
+            make.top.equalTo($("update-version-title").bottom).offset(8);
+            make.left.right.inset(16);
+            make.width.lessThanOrEqualTo(maxCardWidth);
+          },
+          views: [
+            // 应用编号行
+            {
+              type: "label",
+              props: {
+                text: "应用编号",
+                font: $font(15),
+                textColor: labelColor,
+                id: "app-id-label"
+              },
+              layout: function(make, view) {
+                make.top.inset(16);
+                make.left.inset(16);
+                make.width.equalTo(80);
+              }
+            },
+            {
+              type: "label",
+              props: {
+                text: "",
+                font: $font(15),
+                textColor: valueColor,
+                id: "app-id-value",
+                align: $align.right,
+                lines: 0,
+                userInteractionEnabled: true
+              },
+              layout: function(make, view) {
+                make.centerY.equalTo($("app-id-label"));
+                make.left.equalTo($("app-id-label").right).offset(8);
+                make.right.inset(16);
+              },
+              events: {
+                longPressed: createLongPressHandler(function() { return appId; })
+              }
+            },
+            // 分隔线1
+            {
+              type: "view",
+              props: {
+                bgcolor: separatorColor
+              },
+              layout: function(make, view) {
+                make.top.equalTo($("app-id-label").bottom).offset(12);
+                make.left.inset(16);
+                make.right.inset(16);
+                make.height.equalTo(0.5);
+              }
+            },
+            // 当前版本行
+            {
+              type: "label",
+              props: {
+                text: "当前版本",
+                font: $font(15),
+                textColor: labelColor,
+                id: "version-label"
+              },
+              layout: function(make, view) {
+                make.top.equalTo($("app-id-label").bottom).offset(24);
+                make.left.inset(16);
+                make.width.equalTo(80);
+              }
+            },
+            {
+              type: "label",
+              props: {
+                text: "",
+                font: $font(15),
+                textColor: valueColor,
+                id: "version-value",
+                align: $align.right,
+                lines: 0,
+                userInteractionEnabled: true
+              },
+              layout: function(make, view) {
+                make.centerY.equalTo($("version-label"));
+                make.left.equalTo($("version-label").right).offset(8);
+                make.right.inset(16);
+              },
+              events: {
+                longPressed: createLongPressHandler(function() { return appVersion; })
+              }
+            },
+            // 分隔线2
+            {
+              type: "view",
+              props: {
+                bgcolor: separatorColor
+              },
+              layout: function(make, view) {
+                make.top.equalTo($("version-label").bottom).offset(12);
+                make.left.inset(16);
+                make.right.inset(16);
+                make.height.equalTo(0.5);
+              }
+            },
+            // 更新日期行
+            {
+              type: "label",
+              props: {
+                text: "更新日期",
+                font: $font(15),
+                textColor: labelColor,
+                id: "date-label"
+              },
+              layout: function(make, view) {
+                make.top.equalTo($("version-label").bottom).offset(24);
+                make.left.inset(16);
+                make.width.equalTo(80);
+              }
+            },
+            {
+              type: "label",
+              props: {
+                text: "",
+                font: $font(15),
+                textColor: valueColor,
+                id: "date-value",
+                align: $align.right,
+                lines: 0,
+                userInteractionEnabled: true
+              },
+              layout: function(make, view) {
+                make.centerY.equalTo($("date-label"));
+                make.left.equalTo($("date-label").right).offset(8);
+                make.right.inset(16);
+              },
+              events: {
+                longPressed: createLongPressHandler(function() { return updateDate; })
+              }
+            },
+            // 分隔线3
+            {
+              type: "view",
+              props: {
+                bgcolor: separatorColor
+              },
+              layout: function(make, view) {
+                make.top.equalTo($("date-label").bottom).offset(12);
+                make.left.inset(16);
+                make.right.inset(16);
+                make.height.equalTo(0.5);
+              }
+            },
+            // 包标识符行
+            {
+              type: "label",
+              props: {
+                text: "包标识符",
+                font: $font(15),
+                textColor: labelColor,
+                id: "bundle-label"
+              },
+              layout: function(make, view) {
+                make.top.equalTo($("date-label").bottom).offset(24);
+                make.left.inset(16);
+                make.width.equalTo(80);
+                make.bottom.inset(16);
+              }
+            },
+            {
+              type: "label",
+              props: {
+                text: "",
+                font: $font(15),
+                textColor: valueColor,
+                id: "bundle-value",
+                align: $align.right,
+                lines: 0,
+                userInteractionEnabled: true
+              },
+              layout: function(make, view) {
+                make.centerY.equalTo($("bundle-label"));
+                make.left.equalTo($("bundle-label").right).offset(8);
+                make.right.inset(16);
+              },
+              events: {
+                longPressed: createLongPressHandler(function() { return bundleId; })
+              }
+            }
+          ]
         },
+        // 发布说明标题
         {
           type: "label",
           props: {
-            text: "发布说明：",
+            text: "发布说明",
             lines: 0,
             font: titleFont,
             textColor: titleColor,
             id: "release-notes-title"
           },
           layout: function(make, view) {
-            make.top.equalTo($("update-version").bottom).offset(30);
-            make.left.inset(10);
-            make.width.equalTo(view.super).offset(-20);
+            make.top.equalTo($("info-card").bottom).offset(24);
+            make.left.right.inset(16);
           }
         },
+        // 发布说明卡片
         {
-          type: "text",
-          props: {
-            text: releaseNotesTranslated,
-            font: contentFont,
-            textColor: contentColor,
-            id: "release-notes-content",
-            editable: false,
-            selectable: true,
-            scrollEnabled: false
-          },
+          type: "view",
+          props: Object.assign({
+            id: "release-notes-card"
+          }, cardStyle),
           layout: function(make, view) {
-            make.top.equalTo($("release-notes-title").bottom).offset(5);
-            make.left.equalTo($("release-notes-title"));
-            make.width.equalTo($("release-notes-title"));
-          }
+            make.top.equalTo($("release-notes-title").bottom).offset(8);
+            make.left.right.inset(16);
+            make.width.lessThanOrEqualTo(maxCardWidth);
+          },
+          views: [
+            {
+              type: "text",
+              props: Object.assign({
+                text: releaseNotesTranslated,
+                textColor: contentColor,
+                id: "release-notes-content"
+              }, textContentStyle),
+              layout: createContentLayout(),
+              events: {
+                longPressed: createLongPressHandler(function() { return releaseNotesTranslated; })
+              }
+            }
+          ]
         },
+        // 应用描述标题
         {
           type: "label",
           props: {
-            text: "应用描述：",
+            text: "应用描述",
             lines: 0,
             font: titleFont,
             textColor: titleColor,
             id: "app-description-title"
           },
           layout: function(make, view) {
-            make.top.equalTo($("release-notes-content").bottom).offset(30);
-            make.left.equalTo($("release-notes-content"));
-            make.width.equalTo($("release-notes-content"));
+            make.top.equalTo($("release-notes-card").bottom).offset(24);
+            make.left.right.inset(16);
           }
         },
+        // 应用描述卡片
         {
-          type: "text",
-          props: {
-            text: appDescriptionTranslated,
-            font: contentFont,
-            textColor: contentColor,
-            id: "app-description-content",
-            editable: false,
-            selectable: true,
-            scrollEnabled: false
-          },
+          type: "view",
+          props: Object.assign({
+            id: "app-description-card"
+          }, cardStyle),
           layout: function(make, view) {
-            make.top.equalTo($("app-description-title").bottom).offset(5);
-            make.left.equalTo($("app-description-title"));
-            make.width.equalTo($("app-description-title"));
-            make.bottom.equalTo(view.super).offset(-10);
-          }
+            make.top.equalTo($("app-description-title").bottom).offset(8);
+            make.left.right.inset(16);
+            make.bottom.inset(16);
+            make.width.lessThanOrEqualTo(maxCardWidth);
+          },
+          views: [
+            {
+              type: "text",
+              props: Object.assign({
+                text: appDescriptionTranslated,
+                textColor: contentColor,
+                id: "app-description-content"
+              }, textContentStyle),
+              layout: createContentLayout(),
+              events: {
+                longPressed: createLongPressHandler(function() { return appDescriptionTranslated; })
+              }
+            }
+          ]
         }
       ]
     }]
   });
+  
+  // 填充应用信息数据
+  setTimeout(function() {
+    if ($("app-id-value")) {
+      $("app-id-value").text = appId;
+    }
+    if ($("version-value")) {
+      $("version-value").text = appVersion;
+    }
+    if ($("date-value")) {
+      $("date-value").text = updateDate;
+    }
+    if ($("bundle-value")) {
+      $("bundle-value").text = bundleId;
+    }
+  }, 100);
 }
