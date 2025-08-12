@@ -1,4 +1,4 @@
-// t.me/ibilibili
+// 作者 https://t.me/ibilibili
 
 $app.theme = "auto"; // 启用Dark Mode自动切换支持
 
@@ -18,10 +18,10 @@ const MODELS = ["qwen-mt-turbo", "qwen-mt-plus"];
 const MESSAGES = {
   API_KEY_REQUIRED: "请输入API Key",
   CONFIG_REQUIRED: "请先在JSBox内运行此脚本进行配置",
-  TRANSLATING: "正在翻译...",
-  TRANSLATION_COMPLETE: "翻译完成",
   CONFIG_SAVED: "配置已保存",
-  CACHE_CLEARED: "翻译缓存已全部清除"
+  CACHE_CLEARED: "翻译缓存已全部清除",
+  RELEASE_NOTES_PLACEHOLDER: "正在翻译发布说明，请稍候...",
+  APP_DESCRIPTION_PLACEHOLDER: "正在翻译应用描述，请稍候..."
 };
 
 // 全局变量
@@ -68,10 +68,7 @@ const cardStyle = {
   bgcolor: cardColor,
   cornerRadius: 12,
   smoothCorners: true,
-  shadowColor: $color({
-    light: "#000000",
-    dark: "#000000"
-  }),
+  shadowColor: $color("#000000"),
   shadowOpacity: 0.1,
   shadowOffset: $size(0, 2),
   shadowRadius: 8
@@ -92,7 +89,8 @@ const textContentStyle = {
   bgcolor: $color("clear"),
   lines: 0,
   textContainerInset: $insets(0, 0, 0, 0),
-  userInteractionEnabled: true
+  userInteractionEnabled: true,
+  fixedWidth: true
 };
 
 // 通用按钮样式
@@ -103,9 +101,7 @@ const buttonStyle = {
 // 通用标题字体
 const titleFont = $font("bold", 18);
 
-// 通用宽度限制
-const maxCardWidth = $device.info.screen.width - 32;
-const maxContentWidth = $device.info.screen.width - 64;
+// 移除未使用的宽度限制常量
 
 // 创建按钮布局函数
 function createButtonLayout(topInset) {
@@ -121,7 +117,7 @@ function createContentLayout() {
   return function(make, view) {
     make.top.left.right.inset(16);
     make.bottom.inset(16);
-    make.width.lessThanOrEqualTo(maxContentWidth);
+    make.width.equalTo(view.super).offset(-32);
   };
 }
 
@@ -130,7 +126,7 @@ function createLongPressHandler(getValue) {
   return function(sender) {
     const value = typeof getValue === 'function' ? getValue() : getValue;
     $clipboard.text = value;
-    $ui.toast("已复制");
+    $device.taptic(2);
   };
 }
 
@@ -348,25 +344,17 @@ function getConfig() {
 // 通用函数：从UI获取配置值
 function getConfigFromUI() {
   const listView = $("list");
-  let apiKey = "";
-  let modelIndex = 0;
   
   // 获取API Key输入框的值
-  const apiKeyCell = listView.cell($indexPath(0, 0));
-  const apiKeyInput = apiKeyCell.get("input");
-  if (apiKeyInput) {
-    apiKey = apiKeyInput.text.trim();
-  }
+  const apiKeyInput = listView.cell($indexPath(0, 0)).get("input");
+  const apiKey = apiKeyInput ? apiKeyInput.text.trim() : "";
   
   // 获取模型选择器的值
-  const modelCell = listView.cell($indexPath(0, 1));
-  const modelTab = modelCell.get("tab");
-  if (modelTab) {
-    modelIndex = modelTab.index;
-  }
+  const modelTab = listView.cell($indexPath(0, 1)).get("tab");
+  const modelIndex = modelTab ? modelTab.index : 0;
   
   return {
-    apiKey: apiKey,
+    apiKey,
     model: MODELS[modelIndex]
   };
 }
@@ -380,14 +368,8 @@ function saveConfig() {
     return;
   }
   
-  const config = { apiKey, model };
-  $cache.set(CONFIG_KEY, config);
-  
-  $ui.alert({
-    title: "成功",
-    message: MESSAGES.CONFIG_SAVED,
-    actions: [defaultAlertAction]
-  });
+  $cache.set(CONFIG_KEY, { apiKey, model });
+  showError("成功", MESSAGES.CONFIG_SAVED);
 }
 
 // 清除翻译缓存
@@ -436,11 +418,7 @@ function clearTranslationCache() {
 
 // 显示测试结果
 function showTestResult(title, message) {
-  $ui.alert({
-    title: title,
-    message: message,
-    actions: [defaultAlertAction]
-  });
+  showError(title, message);
 }
 
 // 测试API连接
@@ -483,10 +461,8 @@ function testAPIConnection() {
     handler: function(resp) {
       $ui.loading(false);
       if (resp.response.statusCode === 200) {
-        // 验证响应格式是否正确
         try {
-          if ((resp.data && resp.data.output && resp.data.output.choices && resp.data.output.choices.length > 0) ||
-              (resp.data && resp.data.output && resp.data.output.text)) {
+          if (resp.data?.output?.choices?.length > 0 || resp.data?.output?.text) {
             showTestResult("测试成功", "API连接正常，响应格式正确，可以正常使用翻译功能");
           } else {
             showTestResult("测试警告", `API连接成功但响应格式异常。\n响应数据: ${JSON.stringify(resp.data)}`);
@@ -495,7 +471,7 @@ function testAPIConnection() {
           showTestResult("测试警告", `API连接成功但解析响应失败: ${e.message}`);
         }
       } else {
-        const errorMsg = resp.data && resp.data.message ? resp.data.message : `HTTP错误: ${resp.response.statusCode}`;
+        const errorMsg = resp.data?.message || `HTTP错误: ${resp.response.statusCode}`;
         showTestResult("测试失败", `API连接失败：${errorMsg}`);
       }
     }
@@ -504,13 +480,11 @@ function testAPIConnection() {
 
 // 查询App信息
 function lookupApp(appid, region) {
-  const url = `https://itunes.apple.com/${region}/lookup?id=${appid}`;
-  
   $http.get({
-    url: url,
+    url: `https://itunes.apple.com/${region}/lookup?id=${appid}`,
     handler: function(resp) {
       $ui.loading(false);
-      if (resp.data && resp.data.results && resp.data.results.length > 0) {
+      if (resp.data?.results?.length > 0) {
         const result = resp.data.results[0];
         releaseNotesOriginal = result.releaseNotes || "暂无发布说明";
         appDescriptionOriginal = result.description || "暂无应用描述";
@@ -534,58 +508,25 @@ function lookupApp(appid, region) {
 function startTranslation() {
   const config = getConfig();
   
-  // 翻译任务完成状态变量
-  let releaseNotesTranslationCompleted = false;
-  let appDescriptionTranslationCompleted = false;
-  let translationStatusInterval = null;
-  
   // 先显示翻译结果页面，然后进行翻译
   releaseNotesTranslated = "";
   appDescriptionTranslated = "";
   showTranslationResult();
   
-  // 检查翻译状态的函数
-  function checkTranslationStatus() {
-    if (releaseNotesTranslationCompleted && appDescriptionTranslationCompleted) {
-      if (translationStatusInterval) {
-        clearInterval(translationStatusInterval);
-        translationStatusInterval = null;
-      }
-      $ui.toast(MESSAGES.TRANSLATION_COMPLETE);
-    }
-  }
-  
   // 通用翻译完成处理函数
   function handleTranslationComplete(isReleaseNotes, result, fromCache) {
     if (isReleaseNotes) {
       releaseNotesTranslated = result;
-      releaseNotesTranslationCompleted = true;
       if ($("release-notes-content")) {
         $("release-notes-content").text = result;
+        $("release-notes-content").textColor = contentColor;
       }
     } else {
       appDescriptionTranslated = result;
-      appDescriptionTranslationCompleted = true;
       if ($("app-description-content")) {
         $("app-description-content").text = result;
+        $("app-description-content").textColor = contentColor;
       }
-    }
-    
-    // 检查是否两个任务都完成了
-    if (releaseNotesTranslationCompleted && appDescriptionTranslationCompleted) {
-      checkTranslationStatus();
-    } else if (!fromCache && !translationStatusInterval) {
-      // 如果当前任务不是从缓存获取且未启动监控，启动状态监控
-      $ui.toast(MESSAGES.TRANSLATING);
-        translationStatusInterval = setInterval(function() {
-          if (releaseNotesTranslationCompleted && appDescriptionTranslationCompleted) {
-            clearInterval(translationStatusInterval);
-            translationStatusInterval = null;
-            $ui.toast(MESSAGES.TRANSLATION_COMPLETE);
-          } else {
-            $ui.toast(MESSAGES.TRANSLATING);
-          }
-       }, 1000);
     }
   }
   
@@ -613,20 +554,14 @@ function startTranslation() {
 
 // 生成缓存键
 function generateCacheKey(text, model) {
-  // 使用文本内容和模型生成唯一缓存键
   const textHash = text.length + "_" + text.substring(0, 50).replace(/[^a-zA-Z0-9]/g, "");
   return `translation_${model}_${textHash}`;
 }
 
 // 检查缓存是否过期（24小时）
 function isCacheExpired(cacheData) {
-  if (!cacheData || !cacheData.timestamp) {
-    return true;
-  }
-  const now = new Date().getTime();
-  const cacheTime = cacheData.timestamp;
-  const twentyFourHours = 24 * 60 * 60 * 1000; // 24小时的毫秒数
-  return (now - cacheTime) > twentyFourHours;
+  if (!cacheData?.timestamp) return true;
+  return (Date.now() - cacheData.timestamp) > 24 * 60 * 60 * 1000;
 }
 
 // 使用Qwen翻译（非流式输出，因为qwen-mt模型不支持增量式流式输出）
@@ -672,19 +607,16 @@ function translateWithQwen(text, apiKey, model, callback) {
         timeout: 60,
         handler: function(resp) {
           if (resp.response.statusCode !== 200) {
-            const errorMsg = resp.data && resp.data.message ? resp.data.message : `HTTP错误: ${resp.response.statusCode}`;
+            const errorMsg = resp.data?.message || `HTTP错误: ${resp.response.statusCode}`;
             callback(false, errorMsg, false);
           } else {
             try {
               let translatedText = "";
-              if (resp.data && resp.data.output && resp.data.output.choices && resp.data.output.choices.length > 0) {
-                // 处理DashScope原生模式的响应格式
+              if (resp.data?.output?.choices?.length > 0) {
                 translatedText = resp.data.output.choices[0].message.content;
-              } else if (resp.data && resp.data.output && resp.data.output.text) {
-                // 兼容处理其他可能的响应格式
+              } else if (resp.data?.output?.text) {
                 translatedText = resp.data.output.text;
               } else {
-                // 尝试解析其他可能的响应格式
                 console.log("响应数据结构:", JSON.stringify(resp.data, null, 2));
                 callback(false, `翻译响应格式错误，响应数据: ${JSON.stringify(resp.data)}`, false);
                 return;
@@ -692,19 +624,16 @@ function translateWithQwen(text, apiKey, model, callback) {
               
               // 异步保存翻译结果到缓存
               const cacheData = {
-                translatedText: translatedText,
-                timestamp: new Date().getTime(),
+                translatedText,
+                timestamp: Date.now(),
                 originalText: text,
-                model: model
+                model
               };
               
               $cache.setAsync({
                 key: cacheKey,
                 value: cacheData,
-                handler: function() {
-                  // 缓存保存完成，返回翻译结果
-                  callback(true, translatedText, false);
-                }
+                handler: () => callback(true, translatedText, false)
               });
             } catch (e) {
               callback(false, `解析响应失败: ${e.message}`, false);
@@ -742,11 +671,15 @@ function showTranslationResult() {
         handler: function() {
           if (currentDisplayContent == 1) {
             $("release-notes-content").text = releaseNotesOriginal;
+            $("release-notes-content").textColor = contentColor;
             $("app-description-content").text = appDescriptionOriginal;
+            $("app-description-content").textColor = contentColor;
             currentDisplayContent = 2;
           } else {
-            $("release-notes-content").text = releaseNotesTranslated;
-            $("app-description-content").text = appDescriptionTranslated;
+            $("release-notes-content").text = releaseNotesTranslated || MESSAGES.RELEASE_NOTES_PLACEHOLDER;
+            $("release-notes-content").textColor = releaseNotesTranslated ? contentColor : labelColor;
+            $("app-description-content").text = appDescriptionTranslated || MESSAGES.APP_DESCRIPTION_PLACEHOLDER;
+            $("app-description-content").textColor = appDescriptionTranslated ? contentColor : labelColor;
             currentDisplayContent = 1;
           }
         }
@@ -805,7 +738,7 @@ function showTranslationResult() {
           layout: function(make, view) {
             make.top.equalTo($("update-version-title").bottom).offset(8);
             make.left.right.inset(16);
-            make.width.lessThanOrEqualTo(maxCardWidth);
+            make.width.equalTo($device.info.screen.width - 32);
           },
           views: [
             // 应用编号行
@@ -1014,14 +947,14 @@ function showTranslationResult() {
           layout: function(make, view) {
             make.top.equalTo($("release-notes-title").bottom).offset(8);
             make.left.right.inset(16);
-            make.width.lessThanOrEqualTo(maxCardWidth);
+            make.width.equalTo($device.info.screen.width - 32);
           },
           views: [
             {
               type: "text",
               props: Object.assign({
-                text: releaseNotesTranslated,
-                textColor: contentColor,
+                text: releaseNotesTranslated || MESSAGES.RELEASE_NOTES_PLACEHOLDER,
+                textColor: releaseNotesTranslated ? contentColor : labelColor,
                 id: "release-notes-content"
               }, textContentStyle),
               layout: createContentLayout(),
@@ -1056,14 +989,14 @@ function showTranslationResult() {
             make.top.equalTo($("app-description-title").bottom).offset(8);
             make.left.right.inset(16);
             make.bottom.inset(16);
-            make.width.lessThanOrEqualTo(maxCardWidth);
+            make.width.equalTo($device.info.screen.width - 32);
           },
           views: [
             {
               type: "text",
               props: Object.assign({
-                text: appDescriptionTranslated,
-                textColor: contentColor,
+                text: appDescriptionTranslated || MESSAGES.APP_DESCRIPTION_PLACEHOLDER,
+                textColor: appDescriptionTranslated ? contentColor : labelColor,
                 id: "app-description-content"
               }, textContentStyle),
               layout: createContentLayout(),
