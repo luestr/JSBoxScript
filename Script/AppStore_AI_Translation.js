@@ -781,11 +781,11 @@ function showTranslationResult() {
         }
       },
       views: [
-        // 关键信息标题
+        // 应用信息标题
         {
           type: "label",
           props: {
-            text: "关键信息",
+            text: "应用信息",
             lines: 0,
             font: titleFont,
             textColor: titleColor,
@@ -796,7 +796,7 @@ function showTranslationResult() {
             make.left.right.inset(16);
           }
         },
-        // 关键信息卡片
+        // 应用信息卡片
         {
           type: "view",
           props: Object.assign({
