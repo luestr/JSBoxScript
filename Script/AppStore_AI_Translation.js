@@ -133,9 +133,14 @@ function createLongPressHandler(getValue) {
 
 
 // 主入口
-if (($app.env == $env.action) && link) {
+if ($app.env == $env.action) {
   // 在App Store分享环境下运行
-  checkConfigAndTranslate();
+  if (link) {
+    checkConfigAndTranslate();
+  } else {
+    // 分享环境下但没有获取到链接
+    showError("获取链接失败", "请确保从App Store应用页面通过分享菜单运行此脚本");
+  }
 } else {
   // 在JSBox内运行，显示配置页面
   showConfigPage();
